@@ -1,11 +1,12 @@
 # ─── Stage 1: Build ───────────────────────────────────────────────────────────
 FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build
-ARG VERSION=1.0.0
 WORKDIR /src
 
+# Restore before declaring ARG VERSION so MSBuild does not inherit VERSION env var
 COPY ["src/MyApp/MyApp.csproj", "src/MyApp/"]
 RUN dotnet restore "src/MyApp/MyApp.csproj"
 
+ARG VERSION=1.0.0
 COPY . .
 WORKDIR "/src/src/MyApp"
 RUN dotnet build "MyApp.csproj" -c Release -o /app/build

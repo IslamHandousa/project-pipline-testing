@@ -38,7 +38,7 @@ jobs:
           if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
             VERSION="${GITHUB_REF#refs/tags/v}"
           else
-            BASE=$(cat VERSION 2>/dev/null || echo "1.0.0")
+            BASE=$(cat VERSION 2>/dev/null | tr -d '\r﻿' | head -1 || echo "1.0.0")
             VERSION="${BASE}-${GITHUB_RUN_NUMBER}-$(echo ${GITHUB_SHA} | head -c7)"
           fi
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
