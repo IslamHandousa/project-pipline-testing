@@ -36,7 +36,7 @@ public class AccountController : Controller
             model.Email, model.Password, model.RememberMe, lockoutOnFailure: true);
 
         if (result.Succeeded)
-            return LocalRedirect(returnUrl ?? Url.Action("Index", "Home")!);
+            return LocalRedirect(returnUrl ?? "/");
 
         if (result.IsLockedOut)
         {
