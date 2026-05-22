@@ -8,8 +8,8 @@ on:
     branches: [main]
 
 env:
-  REGISTRY:     ghcr.io
-  IMAGE_NAME:   ${{ github.repository }}
+  REGISTRY:       docker.io
+  IMAGE_NAME:     ${{ secrets.DOCKERHUB_USERNAME }}/myapp
   DOTNET_VERSION: "9.0.x"
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
@@ -28,7 +28,6 @@ jobs:
         with:
           fetch-depth: 0
 
-      # Resolve image version:  git tag  →  semver;  branch push  →  1.0.x-<run>-<sha>
       - name: Resolve version
         id: version
         run: |
@@ -70,23 +69,15 @@ jobs:
           reporter: dotnet-trx
           fail-on-error: false
 
-      - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v4
-        if: always()
-        with:
-          fail_ci_if_error: false
-
 # ─────────────────────────────────────────────────────────────────────────────
   docker-build-scan-push:
     name: Docker — Build / Scan / Push
     runs-on: ubuntu-latest
     needs: build-test
-    # Skip on PRs — we never push untrusted code to the registry
     if: github.event_name != 'pull_request'
     permissions:
       contents:        read
-      packages:        write
-      security-events: write   # needed to upload SARIF
+      security-events: write
 
     steps:
       - name: Checkout
@@ -95,19 +86,18 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Log in to GHCR
+      - name: Log in to Docker Hub
         uses: docker/login-action@v3
         with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      # Generate all tags:  latest, semver, branch, sha-<short>
+      # Tags: latest (main only), semver (on git tag), branch, sha-<short>, build version
       - name: Docker metadata
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          images: ${{ env.IMAGE_NAME }}
           tags: |
             type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
             type=raw,value=${{ needs.build-test.outputs.version }}
@@ -116,7 +106,7 @@ jobs:
             type=ref,event=branch
             type=sha,prefix=sha-,format=short
 
-      # ── Build locally (no push yet) for Trivy scan ──────────────────────────
+      # ── Build locally first (no push) — needed for Trivy scan ───────────────
       - name: Build image for scanning
         uses: docker/build-push-action@v5
         with:
@@ -128,15 +118,15 @@ jobs:
           cache-from: type=gha
           cache-to:   type=gha,mode=max
 
-      # ── Trivy scan — upload SARIF to GitHub Security tab ────────────────────
+      # ── Trivy — upload SARIF to GitHub Security tab ─────────────────────────
       - name: Trivy scan → SARIF
         uses: aquasecurity/trivy-action@master
         with:
-          image-ref:  myapp:scan
-          format:     sarif
-          output:     trivy-results.sarif
-          severity:   CRITICAL,HIGH
-          exit-code:  "0"            # don't fail here — let the table step fail
+          image-ref: myapp:scan
+          format:    sarif
+          output:    trivy-results.sarif
+          severity:  CRITICAL,HIGH
+          exit-code: "0"
 
       - name: Upload SARIF to GitHub Security
         uses: github/codeql-action/upload-sarif@v3
@@ -144,7 +134,7 @@ jobs:
         with:
           sarif_file: trivy-results.sarif
 
-      # ── Trivy scan — human-readable table, fail on CRITICAL ─────────────────
+      # ── Trivy — fail the pipeline if any CRITICAL CVE found ─────────────────
       - name: Trivy scan → table (fail on CRITICAL)
         uses: aquasecurity/trivy-action@master
         with:
@@ -153,8 +143,8 @@ jobs:
           severity:  CRITICAL
           exit-code: "1"
 
-      # ── Push versioned + latest tags to GHCR ────────────────────────────────
-      - name: Build & push to GHCR
+      # ── Push all versioned tags to Docker Hub ────────────────────────────────
+      - name: Build & push to Docker Hub
         uses: docker/build-push-action@v5
         with:
           context: .
@@ -167,5 +157,5 @@ jobs:
 
       - name: Print pushed tags
         run: |
-          echo "Image tags pushed to GHCR:"
+          echo "Image pushed to Docker Hub:"
           echo "${{ steps.meta.outputs.tags }}"

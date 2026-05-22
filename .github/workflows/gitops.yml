@@ -8,8 +8,8 @@ on:
     branches: [main]
 
 env:
-  REGISTRY:   ghcr.io
-  IMAGE_NAME: ${{ github.repository }}
+  REGISTRY:   docker.io
+  IMAGE_NAME: ${{ secrets.DOCKERHUB_USERNAME }}/myapp
 
 # ─────────────────────────────────────────────────────────────────────────────
 jobs:
@@ -38,16 +38,11 @@ jobs:
 
       - name: Update deployment.yaml
         run: |
-          # GHCR image names must be lowercase
-          REPO_LOWER=$(echo "${IMAGE_NAME}" | tr '[:upper:]' '[:lower:]')
-          NEW_IMAGE="${REGISTRY}/${REPO_LOWER}:${{ steps.tag.outputs.tag }}"
-
-          sed -i "s|image: ghcr.io/.*|image: ${NEW_IMAGE}|g" k8s/deployment.yaml
-
+          NEW_IMAGE="${IMAGE_NAME}:${{ steps.tag.outputs.tag }}"
+          sed -i "s|image: .*myapp:.*|image: ${NEW_IMAGE}|g" k8s/deployment.yaml
           echo "Updated deployment to: ${NEW_IMAGE}"
           grep "image:" k8s/deployment.yaml
         env:
-          REGISTRY:   ${{ env.REGISTRY }}
           IMAGE_NAME: ${{ env.IMAGE_NAME }}
 
       - name: Commit & push manifest change

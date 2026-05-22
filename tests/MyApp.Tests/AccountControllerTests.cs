@@ -5,6 +5,7 @@ using Moq;
 using MyApp.Controllers;
 using MyApp.Models;
 using Xunit;
+using IdentitySignInResult = Microsoft.AspNetCore.Identity.SignInResult;
 
 namespace MyApp.Tests;
 
@@ -76,7 +77,7 @@ public class AccountControllerTests
 
         _signInManager
             .Setup(m => m.PasswordSignInAsync(model.Email, model.Password, false, true))
-            .ReturnsAsync(SignInResult.Success);
+            .ReturnsAsync(IdentitySignInResult.Success);
 
         var result = await _controller.Login(model);
 
@@ -90,7 +91,7 @@ public class AccountControllerTests
 
         _signInManager
             .Setup(m => m.PasswordSignInAsync(model.Email, model.Password, false, true))
-            .ReturnsAsync(SignInResult.Failed);
+            .ReturnsAsync(IdentitySignInResult.Failed);
 
         var result = await _controller.Login(model);
 
@@ -105,7 +106,7 @@ public class AccountControllerTests
 
         _signInManager
             .Setup(m => m.PasswordSignInAsync(model.Email, model.Password, false, true))
-            .ReturnsAsync(SignInResult.LockedOut);
+            .ReturnsAsync(IdentitySignInResult.LockedOut);
 
         var result = await _controller.Login(model);
 
