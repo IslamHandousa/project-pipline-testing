@@ -9,7 +9,7 @@ on:
 
 env:
   REGISTRY:   docker.io
-  IMAGE_NAME: ${{ secrets.DOCKERHUB_USERNAME }}/myapp
+  IMAGE_NAME: 01025261808/myapp
 
 # ─────────────────────────────────────────────────────────────────────────────
 jobs:
