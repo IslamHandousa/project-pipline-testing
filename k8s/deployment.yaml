@@ -1,0 +1,84 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: myapp
+  namespace: myapp
+  labels:
+    app: myapp
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: myapp
+  # Zero-downtime rolling update — GitOps workflow rewrites the image line below
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: myapp
+    spec:
+      # Pull GHCR private image using a pre-created secret:
+      #   kubectl create secret docker-registry ghcr-secret \
+      #     --docker-server=ghcr.io \
+      #     --docker-username=YOUR_GITHUB_USERNAME \
+      #     --docker-password=YOUR_PAT \
+      #     -n myapp
+      imagePullSecrets:
+        - name: ghcr-secret
+
+      containers:
+        - name: myapp
+          # GitOps workflow auto-updates this line on every main-branch push
+          image: ghcr.io/YOUR_GITHUB_USERNAME/YOUR_REPO:latest
+          imagePullPolicy: Always
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          env:
+            - name: ASPNETCORE_ENVIRONMENT
+              value: "Production"
+            - name: APP_VERSION
+              value: "1.0.0"
+            - name: ConnectionStrings__DefaultConnection
+              value: "Data Source=/app/data/app.db"
+          volumeMounts:
+            - name: app-data
+              mountPath: /app/data
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 20
+            periodSeconds: 15
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            failureThreshold: 3
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1001
+            allowPrivilegeEscalation: false
+
+      volumes:
+        - name: app-data
+          persistentVolumeClaim:
+            claimName: myapp-pvc
+
+      securityContext:
+        fsGroup: 1001

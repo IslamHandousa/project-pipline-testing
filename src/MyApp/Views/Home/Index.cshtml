@@ -1,0 +1,41 @@
+@{
+    ViewData["Title"] = "Dashboard";
+}
+
+<div class="row g-4">
+    <div class="col-12">
+        <div class="p-5 bg-white rounded-3 shadow-sm">
+            <h1 class="display-6 fw-bold text-primary">
+                <i class="bi bi-house-fill me-2"></i>Dashboard
+            </h1>
+            <p class="lead text-muted">Welcome back, <strong>@User.Identity?.Name</strong></p>
+            <hr />
+            <div class="row g-3 mt-1">
+                <div class="col-md-4">
+                    <div class="card border-0 bg-primary bg-opacity-10 h-100">
+                        <div class="card-body">
+                            <h6 class="card-title text-primary"><i class="bi bi-tag-fill me-1"></i>App Version</h6>
+                            <p class="card-text fs-5 fw-bold">@(Environment.GetEnvironmentVariable("APP_VERSION") ?? "1.0.0")</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card border-0 bg-success bg-opacity-10 h-100">
+                        <div class="card-body">
+                            <h6 class="card-title text-success"><i class="bi bi-check-circle-fill me-1"></i>Status</h6>
+                            <p class="card-text fs-5 fw-bold">Running</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card border-0 bg-info bg-opacity-10 h-100">
+                        <div class="card-body">
+                            <h6 class="card-title text-info"><i class="bi bi-clock-fill me-1"></i>Server Time</h6>
+                            <p class="card-text fs-5 fw-bold">@DateTime.UtcNow.ToString("HH:mm UTC")</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

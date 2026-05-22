@@ -1,0 +1,170 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [main, develop]
+    tags:    ["v*.*.*"]
+  pull_request:
+    branches: [main]
+
+env:
+  REGISTRY:     ghcr.io
+  IMAGE_NAME:   ${{ github.repository }}
+  DOTNET_VERSION: "9.0.x"
+
+# ─────────────────────────────────────────────────────────────────────────────
+jobs:
+# ─────────────────────────────────────────────────────────────────────────────
+  build-test:
+    name: Build & Test
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # Resolve image version:  git tag  →  semver;  branch push  →  1.0.x-<run>-<sha>
+      - name: Resolve version
+        id: version
+        run: |
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            VERSION="${GITHUB_REF#refs/tags/v}"
+          else
+            BASE=$(cat VERSION 2>/dev/null || echo "1.0.0")
+            VERSION="${BASE}-${GITHUB_RUN_NUMBER}-$(echo ${GITHUB_SHA} | head -c7)"
+          fi
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "Resolved version: ${VERSION}"
+
+      - name: Setup .NET ${{ env.DOTNET_VERSION }}
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Restore
+        run: dotnet restore MyApp.sln
+
+      - name: Build
+        run: dotnet build MyApp.sln --no-restore -c Release
+
+      - name: Test (with coverage)
+        run: |
+          dotnet test MyApp.sln \
+            --no-build -c Release \
+            --verbosity normal \
+            --logger "trx;LogFileName=test-results.trx" \
+            --collect:"XPlat Code Coverage" \
+            --results-directory ./test-results
+
+      - name: Publish test results
+        uses: dorny/test-reporter@v1
+        if: always()
+        with:
+          name: xUnit Results
+          path: "**/test-results.trx"
+          reporter: dotnet-trx
+          fail-on-error: false
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        if: always()
+        with:
+          fail_ci_if_error: false
+
+# ─────────────────────────────────────────────────────────────────────────────
+  docker-build-scan-push:
+    name: Docker — Build / Scan / Push
+    runs-on: ubuntu-latest
+    needs: build-test
+    # Skip on PRs — we never push untrusted code to the registry
+    if: github.event_name != 'pull_request'
+    permissions:
+      contents:        read
+      packages:        write
+      security-events: write   # needed to upload SARIF
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Generate all tags:  latest, semver, branch, sha-<short>
+      - name: Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
+            type=raw,value=${{ needs.build-test.outputs.version }}
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=ref,event=branch
+            type=sha,prefix=sha-,format=short
+
+      # ── Build locally (no push yet) for Trivy scan ──────────────────────────
+      - name: Build image for scanning
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: false
+          load: true
+          tags: myapp:scan
+          build-args: VERSION=${{ needs.build-test.outputs.version }}
+          cache-from: type=gha
+          cache-to:   type=gha,mode=max
+
+      # ── Trivy scan — upload SARIF to GitHub Security tab ────────────────────
+      - name: Trivy scan → SARIF
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref:  myapp:scan
+          format:     sarif
+          output:     trivy-results.sarif
+          severity:   CRITICAL,HIGH
+          exit-code:  "0"            # don't fail here — let the table step fail
+
+      - name: Upload SARIF to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: trivy-results.sarif
+
+      # ── Trivy scan — human-readable table, fail on CRITICAL ─────────────────
+      - name: Trivy scan → table (fail on CRITICAL)
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: myapp:scan
+          format:    table
+          severity:  CRITICAL
+          exit-code: "1"
+
+      # ── Push versioned + latest tags to GHCR ────────────────────────────────
+      - name: Build & push to GHCR
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags:   ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: VERSION=${{ needs.build-test.outputs.version }}
+          cache-from: type=gha
+          cache-to:   type=gha,mode=max
+
+      - name: Print pushed tags
+        run: |
+          echo "Image tags pushed to GHCR:"
+          echo "${{ steps.meta.outputs.tags }}"
