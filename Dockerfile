@@ -14,8 +14,10 @@ RUN dotnet build "MyApp.csproj" -c Release -o /app/build
 # ─── Stage 2: Publish ─────────────────────────────────────────────────────────
 FROM build AS publish
 ARG VERSION=1.0.0
-RUN dotnet publish "MyApp.csproj" -c Release -o /app/publish /p:UseAppHost=false \
-    /p:AssemblyVersion=${VERSION} /p:FileVersion=${VERSION}
+RUN SIMPLE_VER=$(echo "${VERSION}" | cut -d'-' -f1) && \
+    dotnet publish "MyApp.csproj" -c Release -o /app/publish /p:UseAppHost=false \
+    /p:AssemblyVersion=${SIMPLE_VER} /p:FileVersion=${SIMPLE_VER} \
+    /p:InformationalVersion=${VERSION}
 
 # ─── Stage 3: Runtime ─────────────────────────────────────────────────────────
 FROM mcr.microsoft.com/dotnet/aspnet:9.0 AS final
