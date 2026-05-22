@@ -1,0 +1,5 @@
+# CVE-2023-45853: zlib integer overflow — Debian marks this will_not_fix in bookworm
+CVE-2023-45853
+
+# CVE-2026-42010: libgnutls30 — no upstream fix available yet
+CVE-2026-42010

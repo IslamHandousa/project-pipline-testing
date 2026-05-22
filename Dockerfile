@@ -31,6 +31,9 @@ LABEL org.opencontainers.image.version="${VERSION}" \
 
 WORKDIR /app
 
+# Apply OS security patches (fixes fixable CVEs in base image packages)
+RUN apt-get update && apt-get upgrade -y && apt-get clean && rm -rf /var/lib/apt/lists/*
+
 # Non-root user for security
 RUN groupadd --system --gid 1001 appgroup \
  && useradd  --system --uid 1001 --gid appgroup appuser \
