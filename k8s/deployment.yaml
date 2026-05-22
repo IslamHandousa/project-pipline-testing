@@ -33,7 +33,7 @@ spec:
       containers:
         - name: myapp
           # GitOps workflow auto-updates this line on every main-branch push
-          image: ghcr.io/YOUR_GITHUB_USERNAME/YOUR_REPO:latest
+          image: ghcr.io/islamhandousa/project-pipline-testing:latest
           imagePullPolicy: Always
           ports:
             - name: http
