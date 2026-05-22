@@ -20,6 +20,9 @@ jobs:
   build-test:
     name: Build & Test
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      checks:   write   # required by dorny/test-reporter to post check runs
     outputs:
       version: ${{ steps.version.outputs.version }}
 
